@@ -1,0 +1,28 @@
+node_modules/
+*.log
+.env
+.env.local
+.env.production.local
+.env.development.local
+dist/
+build/
+.wrangler/
+.dev.vars
+.DS_Store
+*.tsbuildinfo
+
+# GitHub 部署相关
+.github/secrets
+*.pem
+*.key
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS 相关
+Thumbs.db
+ehthumbs.db
+Desktop.ini 

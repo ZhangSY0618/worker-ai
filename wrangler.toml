@@ -1,0 +1,17 @@
+name = "worker-ai"
+main = "src/index.ts"
+compatibility_date = "2023-12-01"
+
+# 环境变量配置
+[vars]
+ENVIRONMENT = "development"
+
+# 生产环境配置
+[env.production]
+name = "worker-ai-prod"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
+# 注意：GROQ_API_KEY 需要在 GitHub Secrets 中设置
+# 部署时会自动注入到 Worker 环境中 
