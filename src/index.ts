@@ -14,6 +14,33 @@ export interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+// CORS 头部配置
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// 创建带 CORS 头部的 JSON 响应
+function createJSONResponse(data: any, status: number = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders,
+    },
+  });
+}
+
+// 创建带 CORS 头部的错误响应
+function createErrorResponse(
+  error: string,
+  details?: string,
+  status: number = 500
+) {
+  return createJSONResponse({ error, details }, status);
+}
+
 export default {
   async fetch(
     request: Request,
@@ -22,13 +49,6 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
-
-    // 设置CORS头
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
 
     // 处理OPTIONS请求
     if (request.method === "OPTIONS") {
@@ -49,26 +69,11 @@ export default {
         case "/api/models":
           return handleModels();
         default:
-          return new Response("404 Not Found", {
-            status: 404,
-            headers: corsHeaders,
-          });
+          return createErrorResponse("404 Not Found", undefined, 404);
       }
     } catch (error) {
       console.error("Error:", error);
-      return new Response(
-        JSON.stringify({
-          error: "服务器内部错误",
-          message: (error as Error).message,
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders,
-          },
-        }
-      );
+      return createErrorResponse("服务器内部错误", (error as Error).message);
     }
   },
 };
@@ -131,6 +136,7 @@ function handleHome(): Response {
                 <li>🌍 全球边缘部署 - Cloudflare Workers</li>
                 <li>🔄 多模型支持 - Llama 3, Mixtral, Gemma 等</li>
                 <li>📊 Token 使用统计</li>
+                <li>🔒 CORS 支持 - 已修复跨域问题</li>
             </ul>
         </div>
     </body>
@@ -138,7 +144,10 @@ function handleHome(): Response {
   `;
 
   return new Response(html, {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      ...corsHeaders,
+    },
   });
 }
 
@@ -147,26 +156,21 @@ function handleHome(): Response {
  */
 async function handleChat(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
-
-  const { message, model = "llama3-8b-8192" } = await request.json();
-
-  if (!message) {
-    return new Response(JSON.stringify({ error: "请提供消息内容" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  if (!env.GROQ_API_KEY) {
-    return new Response(JSON.stringify({ error: "未配置 Groq API 密钥" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createErrorResponse("Method not allowed", undefined, 405);
   }
 
   try {
+    const requestData = (await request.json()) as any;
+    const { message, model = "llama3-8b-8192" } = requestData;
+
+    if (!message) {
+      return createErrorResponse("请提供消息内容", undefined, 400);
+    }
+
+    if (!env.GROQ_API_KEY) {
+      return createErrorResponse("未配置 Groq API 密钥", undefined, 500);
+    }
+
     const groq = new Groq({
       apiKey: env.GROQ_API_KEY,
     });
@@ -181,26 +185,15 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       max_tokens: 1024,
     });
 
-    return new Response(
-      JSON.stringify({
-        response: chatCompletion.choices[0]?.message?.content || "无法生成回复",
-        model: model,
-        usage: chatCompletion.usage,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return createJSONResponse({
+      response: chatCompletion.choices[0]?.message?.content || "无法生成回复",
+      model: model,
+      usage: chatCompletion.usage,
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: "Groq AI 服务暂时不可用",
-        details: (error as Error).message,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+    return createErrorResponse(
+      "Groq AI 服务暂时不可用",
+      (error as Error).message
     );
   }
 }
@@ -210,26 +203,21 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
  */
 async function handleTranslate(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
-
-  const { text, from = "auto", to = "Chinese" } = await request.json();
-
-  if (!text) {
-    return new Response(JSON.stringify({ error: "请提供要翻译的文本" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  if (!env.GROQ_API_KEY) {
-    return new Response(JSON.stringify({ error: "未配置 Groq API 密钥" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createErrorResponse("Method not allowed", undefined, 405);
   }
 
   try {
+    const requestData = (await request.json()) as any;
+    const { text, from = "auto", to = "Chinese" } = requestData;
+
+    if (!text) {
+      return createErrorResponse("请提供要翻译的文本", undefined, 400);
+    }
+
+    if (!env.GROQ_API_KEY) {
+      return createErrorResponse("未配置 Groq API 密钥", undefined, 500);
+    }
+
     const groq = new Groq({
       apiKey: env.GROQ_API_KEY,
     });
@@ -246,29 +234,15 @@ async function handleTranslate(request: Request, env: Env): Promise<Response> {
     const translated =
       chatCompletion.choices[0]?.message?.content?.trim() || "翻译失败";
 
-    return new Response(
-      JSON.stringify({
-        original: text,
-        translated: translated,
-        from: from,
-        to: to,
-        usage: chatCompletion.usage,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return createJSONResponse({
+      original: text,
+      translated: translated,
+      from: from,
+      to: to,
+      usage: chatCompletion.usage,
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: "翻译服务暂时不可用",
-        details: (error as Error).message,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return createErrorResponse("翻译服务暂时不可用", (error as Error).message);
   }
 }
 
@@ -277,26 +251,21 @@ async function handleTranslate(request: Request, env: Env): Promise<Response> {
  */
 async function handleSummarize(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
-
-  const { text } = await request.json();
-
-  if (!text) {
-    return new Response(JSON.stringify({ error: "请提供要摘要的文本" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  if (!env.GROQ_API_KEY) {
-    return new Response(JSON.stringify({ error: "未配置 Groq API 密钥" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createErrorResponse("Method not allowed", undefined, 405);
   }
 
   try {
+    const requestData = (await request.json()) as any;
+    const { text } = requestData;
+
+    if (!text) {
+      return createErrorResponse("请提供要摘要的文本", undefined, 400);
+    }
+
+    if (!env.GROQ_API_KEY) {
+      return createErrorResponse("未配置 Groq API 密钥", undefined, 500);
+    }
+
     const groq = new Groq({
       apiKey: env.GROQ_API_KEY,
     });
@@ -313,28 +282,14 @@ async function handleSummarize(request: Request, env: Env): Promise<Response> {
     const summary =
       chatCompletion.choices[0]?.message?.content?.trim() || "摘要生成失败";
 
-    return new Response(
-      JSON.stringify({
-        original_length: text.length,
-        summary: summary,
-        summary_length: summary.length,
-        usage: chatCompletion.usage,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return createJSONResponse({
+      original_length: text.length,
+      summary: summary,
+      summary_length: summary.length,
+      usage: chatCompletion.usage,
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: "摘要服务暂时不可用",
-        details: (error as Error).message,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return createErrorResponse("摘要服务暂时不可用", (error as Error).message);
   }
 }
 
@@ -373,14 +328,9 @@ async function handleModels(): Promise<Response> {
     },
   ];
 
-  return new Response(
-    JSON.stringify({
-      models,
-      total: models.length,
-      provider: "Groq",
-    }),
-    {
-      headers: { "Content-Type": "application/json" },
-    }
-  );
+  return createJSONResponse({
+    models,
+    total: models.length,
+    provider: "Groq",
+  });
 }
